@@ -1,43 +1,65 @@
-provider "aws" {
-  
+resource "aws_s3_bucket" "mybucket" {
+  bucket = var.bucketname
+
 }
 
-resource "aws_instance" "example" {
-  ami           = "ami-0742b4e673072066f"  # CentOS 7 AMI ID, you might need to replace this with the latest AMI
-  instance_type = "t2.micro"  # Instance type, can be modified as needed
-  key_name      = "your_key_pair_name"  # Replace with your key pair name for SSH access
+resource "aws_s3_bucket_ownership_controls" "example" {
+  bucket = aws_s3_bucket.mybucket.id
 
-  tags = {
-    Name = "example-instance"  # Name for your instance
+  rule {
+    object_ownership = "BucketOwnerPreferred"
   }
-
-  # Security group configuration allowing SSH access (change the CIDR block as needed)
-  security_groups = ["ssh-access"]
-
-  # SSH key configuration for connecting to the instance
-  key_name = "your_key_pair_name"  # Replace with your key pair name for SSH access
-
-  # User data to perform provisioning actions like installing software on the instance
-  user_data = <<-EOF
-              #!/bin/bash
-              sudo yum update -y  # Update packages
-              sudo yum install httpd -y  # Install Apache (example)
-              sudo systemctl start httpd  # Start Apache
-              sudo systemctl enable httpd  # Enable Apache to start on boot
-              EOF
 }
 
-# Security group allowing inbound SSH access
-resource "aws_security_group" "ssh-access" {
-  name        = "ssh-access"
-  description = "Allow SSH inbound traffic"
-  vpc_id      = "your_vpc_id"  # Replace with your VPC ID
+resource "aws_s3_bucket_public_access_block" "example" {
+  bucket = aws_s3_bucket.mybucket.id
 
-  # Inbound rule for SSH (port 22) from anywhere (you might want to restrict this to your IP)
-  ingress {
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]  # Replace with your IP or restrict to specific IP ranges
+  block_public_acls       = false
+  block_public_policy     = false
+  ignore_public_acls      = false
+  restrict_public_buckets = false
+}
+
+resource "aws_s3_bucket_acl" "example" {
+  depends_on = [
+    aws_s3_bucket_ownership_controls.example,
+    aws_s3_bucket_public_access_block.example,
+  ]
+
+  bucket = aws_s3_bucket.mybucket.id
+  acl    = "public-read"
+}
+
+resource "aws_s3_object" "index" {
+  bucket = aws_s3_bucket.mybucket.id
+  key = "index.html"
+  source = "index.html"
+  acl = "public-read"
+  content_type = "text/html"
+}
+
+resource "aws_s3_object" "error" {
+  bucket = aws_s3_bucket.mybucket.id
+  key = "error.html"
+  source = "error.html"
+  acl = "public-read"
+  content_type = "text/html"
+}
+
+
+
+
+
+
+
+
+resource "aws_s3_bucket_website_configuration" "website" {
+  bucket = aws_s3_bucket.mybucket.id
+  index_document {
+    suffix = "index.html"
+}
+  error_document {
+    key = "error.html"
   }
+  depends_on = [ aws_s3_bucket_acl.example ]
 }
